@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './ArtistAutocomplete.css'
 
-function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError = false, errorMessage = "", excludeArtist = null }) {
+function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError = false, errorMessage = "", excludeArtist = null, resetTrigger = 0, disabled = false, selectedArtistProp = null }) {
   const [suggestions, setSuggestions] = useState([])
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -23,18 +23,18 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
       )
       const data = await response.json()
       
-      // Filtrage côté client supplémentaire pour s'assurer de la pertinence
+      // Client-side filtering to ensure relevance
       const relevantArtists = (data.artists || []).filter(artist => {
         const artistName = artist.name.toLowerCase()
         const searchQuery = query.toLowerCase()
-        
-        // Exclure l'artiste déjà sélectionné dans l'autre champ
+
+        // Exclude the artist already selected in the other field
         if (excludeArtist && artist.id === excludeArtist.id) {
           return false
         }
         
         return (
-          (artist.popularity || 0) > 40 && // Popularité supérieure à 40
+          (artist.popularity || 0) > 40 && // Popularity greater than 40%
           (
             artistName.includes(searchQuery) || 
             searchQuery.split(' ').some(word => word.length > 1 && artistName.includes(word))
@@ -54,22 +54,24 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
   }, [excludeArtist])
 
   const handleInputChange = (e) => {
+    if (disabled) return // Do not allow changes if disabled
+
     const newValue = e.target.value
-    
-    // Si on efface le champ, on reset tout
+
+    // If the field is cleared, reset everything
     if (!newValue) {
       setSelectedArtist(null)
       onChange(newValue, null)
     } else if (selectedArtist && newValue === selectedArtist.name) {
-      // Si la valeur correspond exactement à l'artiste sélectionné, on garde la sélection
+      // If the value exactly matches the selected artist, keep the selection
       onChange(newValue, selectedArtist)
     } else {
-      // Sinon, on indique qu'aucun artiste n'est sélectionné pour la validation
-      // mais on garde selectedArtist pour l'image jusqu'à ce qu'un nouvel artiste soit sélectionné
+      // Otherwise, indicate that no artist is selected for validation
+      // but keep selectedArtist for the image until a new artist is selected
       onChange(newValue, null)
     }
 
-    // Débounce la recherche
+    // Debounce the search
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
@@ -80,7 +82,7 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
   }
 
   const handleSuggestionClick = (artist) => {
-    onChange(artist.name, artist) // Passer aussi l'objet artiste complet
+    onChange(artist.name, artist) // Pass the complete artist object as well
     setSelectedArtist(artist)
     setSuggestions([])
     setIsOpen(false)
@@ -88,7 +90,7 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
   }
 
   const handleBlur = () => {
-    // Délai pour permettre le clic sur une suggestion
+    // Delay to allow click on a suggestion
     setTimeout(() => {
       setIsOpen(false)
     }, 200)
@@ -108,6 +110,25 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
       }
     }
   }, [])
+
+  // Reset the component when resetTrigger changes
+  useEffect(() => {
+    if (resetTrigger > 0) {
+      setSelectedArtist(null)
+      setSuggestions([])
+      setIsOpen(false)
+    }
+  }, [resetTrigger])
+
+  // Synchronize with the selected artist from the parent
+  useEffect(() => {
+    if (selectedArtistProp) {
+      setSelectedArtist(selectedArtistProp)
+    } else if (selectedArtistProp === null) {
+      // If the parent explicitly passes null, clear the selected artist
+      setSelectedArtist(null)
+    }
+  }, [selectedArtistProp])
 
   return (
     <div className="autocomplete-container">
@@ -131,8 +152,9 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`artist-input ${hasError ? 'error' : ''}`}
+          className={`artist-input ${hasError ? 'error' : ''} ${disabled ? 'disabled' : ''}`}
           autoComplete="off"
+          disabled={disabled}
         />
         
         {loading && (
@@ -170,9 +192,6 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
                         {artist.genres.slice(0, 2).join(', ')}
                       </div>
                     )}
-                    <div className="artist-followers">
-                      {artist.followers?.total?.toLocaleString()} followers
-                    </div>
                   </div>
                 </div>
                 <div className="artist-popularity">
