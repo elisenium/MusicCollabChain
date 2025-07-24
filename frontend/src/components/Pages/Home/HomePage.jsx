@@ -5,8 +5,9 @@ import './HomePage.css'
 function HomePage({ onStartGame }) {
   const [numberOfTeams, setNumberOfTeams] = useState(2)
   const [teamNames, setTeamNames] = useState(['Équipe 1', 'Équipe 2'])
-  const [currentStep, setCurrentStep] = useState('teams') // 'teams' or 'names'
+  const [currentStep, setCurrentStep] = useState('teams') // 'teams', 'gameMode' or 'names'
   const [showRules, setShowRules] = useState(false)
+  const [gameMode, setGameMode] = useState('race') // 'race', 'survival', 'timed', 'combo', 'referee', 'blitz'
 
   const handleTeamCountChange = (count) => {
     setNumberOfTeams(count)
@@ -24,18 +25,22 @@ function HomePage({ onStartGame }) {
 
   const handleNext = () => {
     if (currentStep === 'teams') {
+      setCurrentStep('gameMode')
+    } else if (currentStep === 'gameMode') {
       setCurrentStep('names')
     }
   }
 
   const handleBack = () => {
     if (currentStep === 'names') {
+      setCurrentStep('gameMode')
+    } else if (currentStep === 'gameMode') {
       setCurrentStep('teams')
     }
   }
 
   const handleStartGame = () => {
-    onStartGame(teamNames)
+    onStartGame(teamNames, gameMode)
   }
 
   const toggleRules = () => {
@@ -45,6 +50,9 @@ function HomePage({ onStartGame }) {
   const canProceed = () => {
     if (currentStep === 'teams') {
       return numberOfTeams >= 2 && numberOfTeams <= 6
+    }
+    if (currentStep === 'gameMode') {
+      return gameMode !== ''
     }
     if (currentStep === 'names') {
       return teamNames.every(name => name.trim().length > 0)
@@ -84,6 +92,117 @@ function HomePage({ onStartGame }) {
             </div>
           )}
 
+          {currentStep === 'gameMode' && (
+            <div className="step-content">
+              <h2>Choisissez le mode de jeu</h2>
+              <p className="step-description">Sélectionnez le type de partie que vous voulez jouer</p>
+              
+              <div className="game-modes-grid">
+                <div 
+                  className={`game-mode-button ${gameMode === 'race' ? 'active' : ''}`}
+                  onClick={() => setGameMode('race')}
+                >
+                  <div className="mode-icon">🏆</div>
+                  <div className="mode-name">Course</div>
+                  <div className="mode-subtitle">Premier à 10 points</div>
+                  <div className="tooltip">
+                    <div className="tooltip-content">
+                      <strong>Mode Course</strong><br/>
+                      • Premier à 10 points gagne<br/>
+                      • Parties rapides (15-20 min)<br/>
+                      • Idéal pour débuter
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  className={`game-mode-button ${gameMode === 'survival' ? 'active' : ''}`}
+                  onClick={() => setGameMode('survival')}
+                >
+                  <div className="mode-icon">💀</div>
+                  <div className="mode-name">Survie</div>
+                  <div className="mode-subtitle">3 erreurs = élimination</div>
+                  <div className="tooltip">
+                    <div className="tooltip-content">
+                      <strong>Mode Survie</strong><br/>
+                      • 3 erreurs par équipe<br/>
+                      • Dernière équipe survivante gagne<br/>
+                      • Plus stratégique et intense
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  className={`game-mode-button ${gameMode === 'timed' ? 'active' : ''}`}
+                  onClick={() => setGameMode('timed')}
+                >
+                  <div className="mode-icon">⏱️</div>
+                  <div className="mode-name">Chrono</div>
+                  <div className="mode-subtitle">15 minutes chrono</div>
+                  <div className="tooltip">
+                    <div className="tooltip-content">
+                      <strong>Mode Chrono</strong><br/>
+                      • 15 minutes de jeu<br/>
+                      • Maximum de points dans le temps<br/>
+                      • Pression du temps imparti
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  className={`game-mode-button ${gameMode === 'combo' ? 'active' : ''}`}
+                  onClick={() => setGameMode('combo')}
+                >
+                  <div className="mode-icon">🔥</div>
+                  <div className="mode-name">Combo</div>
+                  <div className="mode-subtitle">Points progressifs</div>
+                  <div className="tooltip">
+                    <div className="tooltip-content">
+                      <strong>Mode Combo</strong><br/>
+                      • 1pt → 2pts → 3pts pour les combos<br/>
+                      • Reset après une erreur<br/>
+                      • Premier à 15 points gagne
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  className={`game-mode-button ${gameMode === 'referee' ? 'active' : ''}`}
+                  onClick={() => setGameMode('referee')}
+                >
+                  <div className="mode-icon">👨‍⚖️</div>
+                  <div className="mode-name">Arbitre</div>
+                  <div className="mode-subtitle">Validation manuelle</div>
+                  <div className="tooltip">
+                    <div className="tooltip-content">
+                      <strong>Mode Arbitre</strong><br/>
+                      • Un arbitre valide les réponses<br/>
+                      • Pas de vérification automatique<br/>
+                      • Plus de flexibilité sur les collaborations
+                    </div>
+                  </div>
+                </div>
+
+                <div 
+                  className={`game-mode-button ${gameMode === 'blitz' ? 'active' : ''}`}
+                  onClick={() => setGameMode('blitz')}
+                >
+                  <div className="mode-icon">⚡</div>
+                  <div className="mode-name">Blitz</div>
+                  <div className="mode-subtitle">15 secondes par tour</div>
+                  <div className="tooltip">
+                    <div className="tooltip-content">
+                      <strong>Mode Blitz</strong><br/>
+                      • 15 secondes maximum par réponse<br/>
+                      • Rythme ultra rapide<br/>
+                      • Premier à 8 points gagne
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {currentStep === 'names' && (
             <div className="step-content">
               <h2>Nommez vos équipes</h2>
@@ -111,13 +230,13 @@ function HomePage({ onStartGame }) {
           )}
 
           <div className="step-actions">
-            {currentStep === 'names' && (
+            {(currentStep === 'names' || currentStep === 'gameMode') && (
               <button onClick={handleBack} className="back-step-button">
                 ← Retour
               </button>
             )}
             
-            {currentStep === 'teams' && (
+            {(currentStep === 'teams' || currentStep === 'gameMode') && (
               <button 
                 onClick={handleNext}
                 disabled={!canProceed()}
