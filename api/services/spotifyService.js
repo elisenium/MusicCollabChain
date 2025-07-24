@@ -44,435 +44,140 @@ function isGenericArtist(artistName) {
 async function getArtistCollaborations(artistId) {
   const token = await getAccessToken();
 
-  // Fetch artist details
+  // Get artist details
   const artistResponse = await axios.get(
     `https://api.spotify.com/v1/artists/${artistId}`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     }
   );
 
   const artistName = artistResponse.data.name;
   const collaborations = [];
-  const seen = new Set(); // Éviter les doublons
+  const seen = new Set();
 
-  // Albums where the artist appears as a guest (featuring)
-  const appearsOnResponse = await axios.get(
-    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=appears_on&limit=50`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+  // Helper function to add collaboration
+  const addCollaboration = (track, album, collaborators, source) => {
+    if (collaborators.length === 0) return;
+    
+    const key = `${track?.name || album.name}-${album.name}-${collaborators[0].name}`;
+    if (seen.has(key)) return;
+    
+    seen.add(key);
+    collaborations.push({
+      trackName: track?.name,
+      albumName: album.name,
+      releaseDate: album.release_date,
+      collaborators,
+      spotifyUrl: track?.external_urls?.spotify || album.external_urls.spotify,
+      albumImage: album.images?.[0]?.url,
+      popularity: track?.popularity,
+      source
+    });
+  };
 
-  // Process "appears_on" albums - check individual tracks too
-  for (const album of appearsOnResponse.data.items) {
-    // First, add album-level collaborations
-    const albumCollaborators = album.artists
-      .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
+  // Helper function to extract collaborators
+  const extractCollaborators = (artists, excludeId) => {
+    return artists
+      .filter(artist => artist.id !== excludeId && !isGenericArtist(artist.name))
       .map(artist => ({
         name: artist.name,
         id: artist.id,
-        role: 'main_artist'
+        role: 'artist'
       }));
+  };
 
-    if (albumCollaborators.length > 0) {
-      const key = `${album.name}-${albumCollaborators[0].name}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        collaborations.push({
-          albumName: album.name,
-          releaseDate: album.release_date,
-          collaborators: albumCollaborators,
-          spotifyUrl: album.external_urls.spotify,
-          albumImage: album.images[0]?.url,
-          albumType: album.album_type,
-          source: 'appears_on'
-        });
-      }
-    }
-
-    // Also check individual tracks in appears_on albums
-    try {
-      const tracksResponse = await axios.get(
-        `https://api.spotify.com/v1/albums/${album.id}/tracks`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      tracksResponse.data.items.forEach(track => {
-        const hasOurArtist = track.artists.some(artist => artist.id === artistId);
-        if (hasOurArtist && track.artists.length > 1) {
-          const trackCollaborators = track.artists
-            .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
-            .map(artist => ({
-              name: artist.name,
-              id: artist.id,
-              role: 'main_artist'
-            }));
-
-          if (trackCollaborators.length > 0) {
-            const key = `${track.name}-${album.name}-${trackCollaborators[0].name}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              collaborations.push({
-                trackName: track.name,
-                albumName: album.name,
-                releaseDate: album.release_date,
-                collaborators: trackCollaborators,
-                spotifyUrl: track.external_urls?.spotify || album.external_urls.spotify,
-                albumImage: album.images[0]?.url,
-                albumType: album.album_type,
-                source: 'appears_on_tracks'
-              });
-            }
-          }
-        }
-      });
-    } catch (error) {
-      console.log(`Erreur pour les tracks de l'album ${album.name}`);
-    }
-  }
-
-  // Artist's own albums with its collaborations
-  const ownAlbumsResponse = await axios.get(
-    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=20`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
-
-  // Check the artist's albums' tracks
-  for (const album of ownAlbumsResponse.data.items) {
-    try {
-      const tracksResponse = await axios.get(
-        `https://api.spotify.com/v1/albums/${album.id}/tracks`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      tracksResponse.data.items.forEach(track => {
-        if (track.artists.length > 1) {
-          const collaborators = track.artists
-            .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
-            .map(artist => ({
-              name: artist.name,
-              id: artist.id,
-              role: 'featured_artist'
-            }));
-
-          if (collaborators.length > 0) {
-            const key = `${track.name}-${album.name}-${collaborators[0].name}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              collaborations.push({
-                trackName: track.name,
-                albumName: album.name,
-                releaseDate: album.release_date,
-                collaborators: collaborators,
-                spotifyUrl: track.external_urls.spotify,
-                albumImage: album.images[0]?.url,
-                albumType: album.album_type,
-                source: 'own_albums'
-              });
-            }
-          }
-        }
-      });
-    } catch (error) {
-      console.log(`Erreur pour l'album ${album.name}`);
-    }
-  }
-
-  // Reverse search - tracks where this artist appears
   try {
-    const searchResponse = await axios.get(
-      `https://api.spotify.com/v1/search?q=artist:"${encodeURIComponent(artistName)}"&type=track&limit=50`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+    // 1. Get albums where artist appears (featuring)
+    const appearsOnResponse = await axios.get(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=appears_on`,
+      { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    // Check each track for collaborations
-    for (const track of searchResponse.data.tracks.items) {
-      const hasOurArtist = track.artists.some(artist => artist.id === artistId);
-      if (hasOurArtist && track.artists.length > 1) {
-        try {
-          // Get the full details of the track to obtain credits
-          const trackDetailsResponse = await axios.get(
-            `https://api.spotify.com/v1/tracks/${track.id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
+    for (const album of appearsOnResponse.data.items) {
+      // Album-level collaborations
+      const albumCollaborators = extractCollaborators(album.artists, artistId);
+      addCollaboration(null, album, albumCollaborators, 'appears_on');
 
-          const trackDetails = trackDetailsResponse.data;
-          const collaborators = trackDetails.artists
-            .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
-            .map(artist => ({
-              name: artist.name,
-              id: artist.id,
-              role: 'artist'
-            }));
-
-          if (collaborators.length > 0) {
-            const key = `${trackDetails.name}-${trackDetails.album.name}-${collaborators[0].name}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              collaborations.push({
-                trackName: trackDetails.name,
-                albumName: trackDetails.album.name,
-                releaseDate: trackDetails.album.release_date,
-                collaborators: collaborators,
-                spotifyUrl: trackDetails.external_urls.spotify,
-                albumImage: trackDetails.album.images[0]?.url,
-                popularity: trackDetails.popularity,
-                durationMs: trackDetails.duration_ms,
-                explicit: trackDetails.explicit,
-                source: 'search_with_details'
-              });
-            }
-          }
-        } catch (trackError) {
-          console.log(`Error for track ${track.name}:`, trackError.message);
-          // Fallback to the old method if we can't retrieve details
-          const collaborators = track.artists
-            .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
-            .map(artist => ({
-              name: artist.name,
-              id: artist.id,
-              role: 'artist'
-            }));
-
-          if (collaborators.length > 0) {
-            const key = `${track.name}-${track.album.name}-${collaborators[0].name}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              collaborations.push({
-                trackName: track.name,
-                albumName: track.album.name,
-                releaseDate: track.album.release_date,
-                collaborators: collaborators,
-                spotifyUrl: track.external_urls.spotify,
-                albumImage: track.album.images[0]?.url,
-                popularity: track.popularity,
-                source: 'search'
-              });
-            }
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.log('Erreur recherche:', error.message);
-  }
-
-  // Enhanced search for missed collaborations
-  try {
-    // Search for tracks with the artist name + common collaboration keywords
-    const enhancedSearchTerms = [
-      `"${artistName}" feat`,
-      `"${artistName}" featuring`,
-      `feat "${artistName}"`,
-      `featuring "${artistName}"`,
-      `"${artistName}" ft`,
-      `ft "${artistName}"`
-    ];
-
-    for (const searchTerm of enhancedSearchTerms) {
+      // Track-level collaborations in appears_on albums
       try {
-        const enhancedSearchResponse = await axios.get(
-          `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=30`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const tracksResponse = await axios.get(
+          `https://api.spotify.com/v1/albums/${album.id}/tracks`,
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
-        for (const track of enhancedSearchResponse.data.tracks.items) {
-          const hasOurArtist = track.artists.some(artist => artist.id === artistId);
-          if (hasOurArtist && track.artists.length > 1) {
-            const collaborators = track.artists
-              .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
-              .map(artist => ({
-                name: artist.name,
-                id: artist.id,
-                role: 'artist'
-              }));
-
-            if (collaborators.length > 0) {
-              const key = `${track.name}-${track.album.name}-${collaborators[0].name}`;
-              if (!seen.has(key)) {
-                seen.add(key);
-                collaborations.push({
-                  trackName: track.name,
-                  albumName: track.album.name,
-                  releaseDate: track.album.release_date,
-                  collaborators: collaborators,
-                  spotifyUrl: track.external_urls.spotify,
-                  albumImage: track.album.images[0]?.url,
-                  popularity: track.popularity,
-                  source: 'enhanced_search'
-                });
-              }
-            }
+        tracksResponse.data.items.forEach(track => {
+          if (track.artists.some(artist => artist.id === artistId) && track.artists.length > 1) {
+            const trackCollaborators = extractCollaborators(track.artists, artistId);
+            addCollaboration(track, album, trackCollaborators, 'appears_on_tracks');
           }
-        }
-      } catch (termError) {
-        console.log(`Error with search term "${searchTerm}":`, termError.message);
+        });
+      } catch (error) {
+        console.log(`Error fetching tracks for album ${album.name}`);
       }
     }
-  } catch (error) {
-    console.log('Error enhanced search:', error.message);
-  }
 
-  // Specific search for multi-artist tracks
-  try {
-    // Search for tracks that might have multiple artists including our artist
-    const multiArtistSearchResponse = await axios.get(
-      `https://api.spotify.com/v1/search?q="${encodeURIComponent(artistName)}"&type=track&limit=50`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+    // 2. Get artist's own albums
+    const ownAlbumsResponse = await axios.get(
+      `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single`,
+      { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    for (const track of multiArtistSearchResponse.data.tracks.items) {
-      const hasOurArtist = track.artists.some(artist => artist.id === artistId);
-      
-      // Look for tracks with our artist and at least 2 other artists (multi-collaboration)
-      if (hasOurArtist && track.artists.length >= 2) {
-        const collaborators = track.artists
-          .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
-          .map(artist => ({
-            name: artist.name,
-            id: artist.id,
-            role: 'artist'
-          }));
+    for (const album of ownAlbumsResponse.data.items) {
+      try {
+        const tracksResponse = await axios.get(
+          `https://api.spotify.com/v1/albums/${album.id}/tracks`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
-        if (collaborators.length > 0) {
-          const key = `${track.name}-${track.album.name}-${collaborators.map(c => c.name).join('-')}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            collaborations.push({
-              trackName: track.name,
-              albumName: track.album.name,
-              releaseDate: track.album.release_date,
-              collaborators: collaborators,
-              spotifyUrl: track.external_urls.spotify,
-              albumImage: track.album.images[0]?.url,
-              popularity: track.popularity,
-              isMultiArtist: collaborators.length > 1,
-              source: 'multi_artist_search'
-            });
+        tracksResponse.data.items.forEach(track => {
+          if (track.artists.length > 1) {
+            const collaborators = extractCollaborators(track.artists, artistId);
+            addCollaboration(track, album, collaborators, 'own_albums');
           }
-        }
+        });
+      } catch (error) {
+        console.log(`Error fetching tracks for album ${album.name}`);
       }
     }
-  } catch (error) {
-    console.log('Error multi-artist search:', error.message);
-  }
 
-  // Bidirectional artist collaboration search
-  try {
-    // Dynamic search based on the artist's actual collaborators found so far
-    const knownCollaborators = [...new Set(collaborations.flatMap(collab => 
-      collab.collaborators ? collab.collaborators.map(c => c.name) : []
-    ))];
+    // 3. Search for tracks with this artist
+    const searchStrategies = [
+      `artist:"${encodeURIComponent(artistName)}"`,
+      `"${artistName}" feat`,
+      `feat "${artistName}"`,
+      `"${artistName}" featuring`,
+      `featuring "${artistName}"`
+    ];
 
-    // Only search if we have some collaborators to work with
-    if (knownCollaborators.length > 0) {
-      const targetCollaborators = knownCollaborators.slice(0, 10); // Limit to top 10 to avoid too many requests
+    for (const searchQuery of searchStrategies) {
+      try {
+        const searchResponse = await axios.get(
+          `https://api.spotify.com/v1/search?q=${searchQuery}&type=track`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
-      for (const collaborator of targetCollaborators) {
-        // Skip if it's the same artist
-        if (collaborator.toLowerCase() === artistName.toLowerCase()) continue;
-
-        const bidirectionalSearchTerms = [
-          `"${artistName}" "${collaborator}"`,
-          `"${collaborator}" "${artistName}"`,
-          `${artistName} ${collaborator}`,
-          `${collaborator} ${artistName}`,
-          `${artistName} feat ${collaborator}`,
-          `${collaborator} feat ${artistName}`,
-          `${artistName} featuring ${collaborator}`,
-          `${collaborator} featuring ${artistName}`
-        ];
-
-        for (const searchTerm of bidirectionalSearchTerms.slice(0, 4)) { // Limit search terms to avoid rate limits
-          try {
-            const bidirectionalSearchResponse = await axios.get(
-              `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=10`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-
-            for (const track of bidirectionalSearchResponse.data.tracks.items) {
-              const hasOurArtist = track.artists.some(artist => artist.id === artistId);
-              if (hasOurArtist && track.artists.length > 1) {
-                const collaborators = track.artists
-                  .filter(artist => artist.id !== artistId && !isGenericArtist(artist.name))
-                  .map(artist => ({
-                    name: artist.name,
-                    id: artist.id,
-                    role: 'artist'
-                  }));
-
-                if (collaborators.length > 0) {
-                  const key = `${track.name}-${track.album.name}-${collaborators.map(c => c.name).join('-')}`;
-                  if (!seen.has(key)) {
-                    seen.add(key);
-                    collaborations.push({
-                      trackName: track.name,
-                      albumName: track.album.name,
-                      releaseDate: track.album.release_date,
-                      collaborators: collaborators,
-                      spotifyUrl: track.external_urls.spotify,
-                      albumImage: track.album.images[0]?.url,
-                      popularity: track.popularity,
-                      isMultiArtist: collaborators.length > 1,
-                      source: 'bidirectional_search',
-                      searchTerm: searchTerm
-                    });
-                  }
-                }
-              }
-            }
-          } catch (termError) {
-            console.log(`Error with bidirectional search term "${searchTerm}":`, termError.message);
+        searchResponse.data.tracks.items.forEach(track => {
+          const hasOurArtist = track.artists.some(artist => artist.id === artistId);
+          if (hasOurArtist && track.artists.length > 1) {
+            const collaborators = extractCollaborators(track.artists, artistId);
+            addCollaboration(track, track.album, collaborators, 'search');
           }
-        }
+        });
+      } catch (error) {
+        console.log(`Error with search strategy "${searchQuery}"`);
       }
     }
+
   } catch (error) {
-    console.log('Error bidirectional search:', error.message);
+    console.log('Error in getArtistCollaborations:', error.message);
   }
 
   return {
     artist: artistName,
     collaborations: collaborations.sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate)),
     totalCollaborations: collaborations.length,
-    searchSources: ['appears_on', 'appears_on_tracks', 'own_albums', 'search_with_details', 'enhanced_search', 'multi_artist_search', 'bidirectional_search']
+    searchSources: ['appears_on', 'appears_on_tracks', 'own_albums', 'search']
   };
 }
 
@@ -481,43 +186,38 @@ async function findCollaborationBetweenArtists(artist1Name, artist2Name) {
   const collaborations = [];
   const seen = new Set();
 
-  try {
-    // Search terms to find collaborations between the two artists
-    const searchTerms = [
-      `"${artist1Name}" "${artist2Name}"`,
-      `"${artist2Name}" "${artist1Name}"`,
-      `${artist1Name} ${artist2Name}`,
-      `${artist2Name} ${artist1Name}`,
-      `${artist1Name} feat ${artist2Name}`,
-      `${artist2Name} feat ${artist1Name}`,
-      `${artist1Name} featuring ${artist2Name}`,
-      `${artist2Name} featuring ${artist1Name}`,
-      `${artist1Name} ft ${artist2Name}`,
-      `${artist2Name} ft ${artist1Name}`
-    ];
+  // Helper function to check if both artists are on a track
+  const hasBothArtists = (track) => {
+    const artistNames = track.artists.map(artist => artist.name.toLowerCase());
+    const hasArtist1 = artistNames.some(name => 
+      name.includes(artist1Name.toLowerCase()) || artist1Name.toLowerCase().includes(name)
+    );
+    const hasArtist2 = artistNames.some(name => 
+      name.includes(artist2Name.toLowerCase()) || artist2Name.toLowerCase().includes(name)
+    );
+    return hasArtist1 && hasArtist2;
+  };
 
+  // Search strategies
+  const searchTerms = [
+    `"${artist1Name}" "${artist2Name}"`,
+    `"${artist2Name}" "${artist1Name}"`,
+    `${artist1Name} ${artist2Name}`,
+    `${artist2Name} ${artist1Name}`,
+    `${artist1Name} feat ${artist2Name}`,
+    `${artist2Name} feat ${artist1Name}`
+  ];
+
+  try {
     for (const searchTerm of searchTerms) {
       try {
         const searchResponse = await axios.get(
-          `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=20`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+          `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track`,
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
-        for (const track of searchResponse.data.tracks.items) {
-          // Check if both artists appear on this track
-          const artistNames = track.artists.map(artist => artist.name.toLowerCase());
-          const hasArtist1 = artistNames.some(name => 
-            name.includes(artist1Name.toLowerCase()) || artist1Name.toLowerCase().includes(name)
-          );
-          const hasArtist2 = artistNames.some(name => 
-            name.includes(artist2Name.toLowerCase()) || artist2Name.toLowerCase().includes(name)
-          );
-
-          if (hasArtist1 && hasArtist2) {
+        searchResponse.data.tracks.items.forEach(track => {
+          if (hasBothArtists(track)) {
             const key = `${track.name}-${track.album.name}`;
             if (!seen.has(key)) {
               seen.add(key);
@@ -530,13 +230,13 @@ async function findCollaborationBetweenArtists(artist1Name, artist2Name) {
                   id: artist.id
                 })),
                 spotifyUrl: track.external_urls.spotify,
-                albumImage: track.album.images[0]?.url,
+                albumImage: track.album.images?.[0]?.url,
                 popularity: track.popularity,
                 searchTerm: searchTerm
               });
             }
           }
-        }
+        });
       } catch (termError) {
         console.log(`Error searching "${searchTerm}":`, termError.message);
       }
