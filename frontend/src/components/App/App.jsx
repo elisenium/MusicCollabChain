@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import HomePage from './components/Pages/HomePage/HomePage'
-import GamePage from './components/Pages/GamePage/GamePage'
+import HomePage from '../Pages/Home/HomePage'
+import GamePage from '../Pages/Game/GamePage'
 import './App.css'
 
 function App() {
