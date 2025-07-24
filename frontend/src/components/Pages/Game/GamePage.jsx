@@ -11,6 +11,7 @@ function GamePage({ teams, onBackToHome }) {
   const [loading, setLoading] = useState(false)
   const [currentTeamIndex, setCurrentTeamIndex] = useState(0)
   const [scores, setScores] = useState(teams.map(() => 0))
+  const [pointAnimation, setPointAnimation] = useState({ show: false, teamIndex: -1 })
   const [errors, setErrors] = useState({ 
     artist1: false, 
     artist2: false, 
@@ -59,6 +60,13 @@ function GamePage({ teams, onBackToHome }) {
       )
       const data = await response.json()
       setResult(data)
+      
+      // Si une collaboration est trouvée, ajouter automatiquement le point
+      if (data.hasCollaboration) {
+        setTimeout(() => {
+          addPoint()
+        }, 500) // Petit délai pour l'effet visuel
+      }
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -83,6 +91,36 @@ function GamePage({ teams, onBackToHome }) {
     const newScores = [...scores]
     newScores[currentTeamIndex] += 1
     setScores(newScores)
+    
+    // Animation du +1
+    setPointAnimation({ show: true, teamIndex: currentTeamIndex })
+    
+    // Jouer un son de notification
+    try {
+      // Créer un son simple avec l'API Web Audio
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+      
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
+      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1)
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+      
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.3)
+    } catch (error) {
+      console.log('Audio not supported:', error)
+    }
+    
+    // Faire disparaître l'animation après 1.5 secondes
+    setTimeout(() => {
+      setPointAnimation({ show: false, teamIndex: -1 })
+    }, 1500)
   }
 
   return (
@@ -108,7 +146,12 @@ function GamePage({ teams, onBackToHome }) {
                 className={`score-item ${index === currentTeamIndex ? 'current' : ''}`}
               >
                 <span className="team">{team}</span>
-                <span className="score">{scores[index]}</span>
+                <div className="score-container">
+                  <span className="score">{scores[index]}</span>
+                  {pointAnimation.show && pointAnimation.teamIndex === index && (
+                    <span className="point-animation">+1</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -172,14 +215,6 @@ function GamePage({ teams, onBackToHome }) {
                   </>
                 )}
               </div>
-
-              {result.hasCollaboration && (
-                <div className="game-actions">
-                  <button onClick={addPoint} className="add-point-button">
-                    +1 Point pour {currentTeam}
-                  </button>
-                </div>
-              )}
 
               {result.hasCollaboration && result.collaborations && (
                 <div className="collaborations-list">
