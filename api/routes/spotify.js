@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { getArtistCollaborations, findCollaborationBetweenArtists } = require('../services/spotifyService');
+const {
+  getArtistCollaborations,
+  findCollaborationBetweenArtists,
+  searchArtists,
+} = require('../services/spotifyService');
 
 router.get('/collaborations/:artistId', async (req, res) => {
   try {
@@ -15,10 +19,24 @@ router.get('/collaborations/:artistId', async (req, res) => {
 router.get('/collaboration-check/:artist1/:artist2', async (req, res) => {
   try {
     const { artist1, artist2 } = req.params;
-    const data = await findCollaborationBetweenArtists(decodeURIComponent(artist1), decodeURIComponent(artist2));
+    const data = await findCollaborationBetweenArtists(
+      decodeURIComponent(artist1),
+      decodeURIComponent(artist2)
+    );
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: 'Failed to check collaboration' });
+  }
+});
+
+// Route for artist search (autocomplete)
+router.get('/search-artists/:query', async (req, res) => {
+  try {
+    const { query } = req.params;
+    const data = await searchArtists(decodeURIComponent(query));
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to search artists' });
   }
 });
 

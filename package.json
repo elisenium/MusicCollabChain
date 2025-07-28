@@ -1,9 +1,11 @@
 {
   "name": "music-collab-game",
   "scripts": {
-    "start": "concurrently \"npm run dev --prefix frontend\" \"npm start --prefix api\""
+    "start": "concurrently \"npm run dev --prefix frontend\" \"npm start --prefix api\"",
+    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm start --prefix api\""
   },
   "devDependencies": {
     "concurrently": "^8.0.0"
-  }
+  },
+  "license": "UNLICENSED"
 }

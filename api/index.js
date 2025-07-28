@@ -22,8 +22,7 @@ app.use(cors(corsOptions));
 app.use(logger('dev'));
 app.use(express.json());
 
-
 app.use('/api/spotify', spotifyRoutes);
 
 const PORT = process.env.PORT;
-app.listen(PORT, () => console.log(`API running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
