@@ -1,7 +1,7 @@
 {
   "name": "music-collab-game",
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix frontend\" \"npm start --prefix api\""
+    "start": "concurrently \"npm run dev --prefix frontend\" \"npm start --prefix api\""
   },
   "devDependencies": {
     "concurrently": "^8.0.0"
