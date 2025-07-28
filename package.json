@@ -7,5 +7,9 @@
   "devDependencies": {
     "concurrently": "^8.0.0"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "nodemon": "^3.1.10",
+    "vite": "^6.3.5"
+  }
 }
