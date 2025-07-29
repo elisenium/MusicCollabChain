@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { API_BASE_URL } from '../../../config/api'
 import ArtistAutocomplete from '../../Autocomplete/ArtistAutocomplete/ArtistAutocomplete'
 import './GamePage.css'
 
@@ -75,7 +76,7 @@ function GamePage({ teams, onBackToHome }) {
     setLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:3000/api/spotify/collaboration-check/${encodeURIComponent(chainArtist.name)}/${encodeURIComponent(artist2)}`
+        `${API_BASE_URL}/api/spotify/collaboration-check/${encodeURIComponent(chainArtist.name)}/${encodeURIComponent(artist2)}`
       )
       const data = await response.json()
       setResult(data)

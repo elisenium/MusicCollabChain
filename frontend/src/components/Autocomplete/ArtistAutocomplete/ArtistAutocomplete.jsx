@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { API_BASE_URL } from '../../../config/api'
 import './ArtistAutocomplete.css'
 
 function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError = false, errorMessage = "", excludeArtist = null, resetTrigger = 0, disabled = false, selectedArtistProp = null }) {
@@ -19,7 +20,7 @@ function ArtistAutocomplete({ value, onChange, placeholder, id, label, hasError 
     setLoading(true)
     try {
       const response = await fetch(
-        `http://localhost:3000/api/spotify/search-artists/${encodeURIComponent(query)}`
+        `${API_BASE_URL}/api/spotify/search-artists/${encodeURIComponent(query)}`
       )
       const data = await response.json()
       
